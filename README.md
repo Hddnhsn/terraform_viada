@@ -5,8 +5,44 @@ This repository contains Terraform configurations for managing cloud infrastruct
 ## 📋 Prerequisites
 
 - [Terraform](https://www.terraform.io/downloads) >= 1.0
-- AWS CLI configured with appropriate credentials
+- [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
 - Bash shell (for running helper scripts)
+- AWS Account with appropriate IAM permissions
+
+## 🔐 Authentication Setup
+
+**⚠️ This is required before using Terraform!**
+
+See the comprehensive [Authentication Guide](docs/AUTHENTICATION.md) for detailed instructions on:
+- AWS CLI configuration
+- Multiple authentication methods (profiles, environment variables, IAM roles)
+- Creating IAM users/roles for Terraform
+- Security best practices
+- CI/CD integration
+
+### Quick Authentication Setup:
+
+```bash
+# 1. Install AWS CLI (if not already installed)
+# macOS: brew install awscli
+# Linux/Windows: See docs/AUTHENTICATION.md
+
+# 2. Configure credentials
+aws configure
+
+# 3. Test authentication
+./scripts/test-auth.sh
+
+# 4. (Optional) Setup S3 backend for remote state
+./scripts/setup-backend.sh
+```
+
+**Available Authentication Methods:**
+- AWS CLI Configuration (recommended for local development)
+- Environment Variables (good for CI/CD)
+- AWS Profiles (for multiple accounts)
+- IAM Roles (for AWS services)
+- AWS SSO
 
 ## 🏗️ Infrastructure Components
 
@@ -18,6 +54,7 @@ This configuration creates:
 - **Internet Gateway** for public internet access
 - **Route Tables** and associations
 - **Security Groups** with basic web traffic rules
+- **IAM Policies, Users, and Roles** (optional) for Terraform management
 
 ## 📁 Project Structure
 
@@ -27,8 +64,12 @@ This configuration creates:
 ├── variables.tf                 # Variable definitions
 ├── outputs.tf                   # Output values
 ├── providers.tf                 # Provider configuration
+├── iam-policies.tf              # IAM resources for Terraform
+├── iam-variables.tf             # IAM-related variables
 ├── terraform.tfvars.example     # Example variable values
 ├── .gitignore                   # Git ignore rules
+├── docs/
+│   └── AUTHENTICATION.md        # Authentication guide
 ├── scripts/
 │   ├── init.sh                  # Initialize Terraform
 │   ├── plan.sh                  # Generate execution plan
@@ -37,39 +78,65 @@ This configuration creates:
 │   ├── format.sh                # Format Terraform files
 │   ├── validate.sh              # Validate configuration
 │   ├── output.sh                # Display outputs
-│   └── refresh.sh               # Refresh state
+│   ├── refresh.sh               # Refresh state
+│   ├── test-auth.sh             # Test AWS authentication
+│   └── setup-backend.sh         # Setup S3 backend
 └── README.md
 ```
 
 ## 🚀 Quick Start
 
-### 1. Initialize Terraform
+### 1. Setup Authentication
 
 ```bash
+# Configure AWS credentials
+aws configure
+
+# Test authentication
 chmod +x scripts/*.sh
+./scripts/test-auth.sh
+```
+
+### 2. Initialize Terraform
+
+```bash
 ./scripts/init.sh
 ```
 
-### 2. Configure Variables
+### 3. Configure Variables
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your values
 ```
 
-### 3. Plan Changes
+### 4. Plan Changes
 
 ```bash
 ./scripts/plan.sh
 ```
 
-### 4. Apply Configuration
+### 5. Apply Configuration
 
 ```bash
 ./scripts/apply.sh
 ```
 
 ## 🛠️ Available Scripts
+
+### `test-auth.sh` ⭐ NEW
+Tests AWS authentication and required permissions.
+
+```bash
+./scripts/test-auth.sh
+```
+
+### `setup-backend.sh` ⭐ NEW
+Sets up S3 bucket and DynamoDB table for remote state management.
+
+```bash
+./scripts/setup-backend.sh
+```
 
 ### `init.sh`
 Initializes Terraform and downloads required providers.
@@ -141,6 +208,15 @@ Refreshes the Terraform state.
 | `private_subnet_cidrs` | Private subnet CIDRs | `["10.0.10.0/24", "10.0.11.0/24"]` |
 | `availability_zones` | Availability zones | `["us-east-1a", "us-east-1b"]` |
 
+### IAM Configuration Variables (Optional)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `create_terraform_iam_policy` | Create IAM policy for Terraform | `false` |
+| `create_terraform_iam_user` | Create IAM user for Terraform | `false` |
+| `create_terraform_iam_role` | Create IAM role for Terraform | `false` |
+| `terraform_role_trusted_arns` | ARNs allowed to assume Terraform role | `[]` |
+
 ### Outputs
 
 The configuration provides the following outputs:
@@ -151,43 +227,66 @@ The configuration provides the following outputs:
 - `private_subnet_ids` - List of private subnet IDs
 - `internet_gateway_id` - Internet Gateway ID
 - `security_group_id` - Main security group ID
+- `terraform_policy_arn` - IAM policy ARN (if created)
+- `terraform_user_arn` - IAM user ARN (if created)
+- `terraform_role_arn` - IAM role ARN (if created)
 
 ## 🔒 Security Best Practices
 
-1. **Never commit `terraform.tfvars`** - It may contain sensitive data
-2. **Use AWS IAM roles** with minimal required permissions
-3. **Enable S3 backend** for state management (see `main.tf`)
-4. **Use state locking** with DynamoDB
-5. **Review plans carefully** before applying
+1. **Never commit credentials** 
+   - `terraform.tfvars` is gitignored
+   - Never hardcode credentials in `.tf` files
+   - Use AWS profiles or environment variables
+
+2. **Use IAM roles with minimal permissions**
+   - See `iam-policies.tf` for example policies
+   - Follow principle of least privilege
+
+3. **Enable remote state management**
+   - Use S3 backend with encryption
+   - Enable state locking with DynamoDB
+   - Run `./scripts/setup-backend.sh` to set up
+
+4. **Review plans carefully** before applying
+
+5. **Rotate access keys regularly**
+
+6. **Enable MFA** for production accounts
 
 ## 📝 Workflow
 
 ### Development Workflow
 
 ```bash
-# 1. Make changes to .tf files
-# 2. Format code
+# 1. Ensure authentication is working
+./scripts/test-auth.sh
+
+# 2. Make changes to .tf files
+
+# 3. Format code
 ./scripts/format.sh
 
-# 3. Validate
+# 4. Validate
 ./scripts/validate.sh
 
-# 4. Plan changes
+# 5. Plan changes
 ./scripts/plan.sh
 
-# 5. Review plan and apply
+# 6. Review plan and apply
 ./scripts/apply.sh
 
-# 6. View outputs
+# 7. View outputs
 ./scripts/output.sh
 ```
 
 ### Production Deployment
 
-1. Create a new branch for changes
-2. Test in dev environment first
-3. Use pull requests for code review
-4. Apply to production after approval
+1. Setup remote state backend with `./scripts/setup-backend.sh`
+2. Create a new branch for changes
+3. Test in dev environment first
+4. Use pull requests for code review
+5. Apply to production after approval
+6. Tag releases
 
 ## 🔄 State Management
 
@@ -195,21 +294,38 @@ The configuration provides the following outputs:
 
 State is stored locally in `terraform.tfstate` (excluded from git).
 
+**⚠️ Not recommended for teams or production!**
+
 ### Remote State (Recommended)
 
-Uncomment the backend configuration in `main.tf`:
+Use the setup script to create S3 backend:
 
-```hcl
-backend "s3" {
-  bucket         = "your-terraform-state-bucket"
-  key            = "viada/terraform.tfstate"
-  region         = "us-east-1"
-  encrypt        = true
-  dynamodb_table = "terraform-state-lock"
-}
+```bash
+./scripts/setup-backend.sh
 ```
 
+This creates:
+- S3 bucket with versioning and encryption
+- DynamoDB table for state locking
+- Proper security configurations
+
+Then update `main.tf` with the backend configuration provided by the script.
+
 ## 🐛 Troubleshooting
+
+### Error: No valid credential sources
+```bash
+# Check configuration
+aws configure list
+
+# Test credentials
+./scripts/test-auth.sh
+```
+
+### Error: Access Denied
+- Verify IAM permissions
+- Check if MFA is required
+- Review `docs/AUTHENTICATION.md`
 
 ### Error: No plan file found
 Run `./scripts/plan.sh` before `./scripts/apply.sh`
@@ -222,16 +338,18 @@ Make scripts executable: `chmod +x scripts/*.sh`
 
 ## 📚 Additional Resources
 
+- [Authentication Guide](docs/AUTHENTICATION.md)
 - [Terraform Documentation](https://www.terraform.io/docs)
 - [AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [Terraform Best Practices](https://www.terraform-best-practices.com/)
+- [AWS IAM Best Practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Test thoroughly in dev environment
 5. Submit a pull request
 
 ## 📄 License
@@ -245,4 +363,4 @@ This project is private and proprietary.
 
 ---
 
-**Note**: Always review and test infrastructure changes in a development environment before applying to production.
+**Note**: Always review and test infrastructure changes in a development environment before applying to production. Ensure authentication is properly configured before running any Terraform commands.
